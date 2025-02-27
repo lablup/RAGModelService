@@ -1,5 +1,16 @@
+TensorRT-LLM/
 TensorRT-LLM/*
 
 *.egg-info
-__pycache__
-
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+.idea/
+.vscode/
+*.log
+.DS_Store
