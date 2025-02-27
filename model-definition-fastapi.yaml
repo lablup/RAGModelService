@@ -7,6 +7,6 @@ models:
           args:
             command: ["/bin/bash", "/models/RAGModelService/setup.sh"]
       start_command:
-        - python3
-        - /models/RAGModelService/fastapi_server.py
+        - /bin/bash
+        - /models/RAGModelService/run_fastapi_server.sh
       port: 8000

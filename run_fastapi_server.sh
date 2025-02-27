@@ -1,6 +1,7 @@
 #!/bin/bash
 
-
 cd /models/RAGModelService/
+
 source .env
-pip install -e .
+export OPENAI_API_KEY=""
+python3 fastapi_server.py
