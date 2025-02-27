@@ -1,0 +1,12 @@
+models:
+  - name: "Backend.AI-Assistant"
+    model_path: "/models"
+    service:
+      pre_start_actions:
+        - action: run_command
+          args:
+            command: ["/bin/bash", "/models/setup.sh"]
+      start_command:
+        - python3
+        - /models/backend-ai-assistant/fastapi_server.py
+      port: 8000

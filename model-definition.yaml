@@ -1,0 +1,12 @@
+models:
+  - name: "TensroRT-LLM RAG Service"
+    model_path: "/models"
+    service:
+      pre_start_actions:
+        - action: run_command
+          args:
+            command: ["/bin/bash", "/models/setup.sh"]
+      start_command:
+        - python3
+        - /models/RAGModelService/fastapi_server.py
+      port: 8000
