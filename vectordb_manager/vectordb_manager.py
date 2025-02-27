@@ -9,6 +9,9 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from pydantic import BaseModel
+import os
+from dotenv import load_dotenv
+
 
 logger = structlog.get_logger()
 
@@ -145,10 +148,7 @@ class VectorDBManager:
 
 async def main():
     """Test the VectorDBManager functionality."""
-    import os
-    import asyncio
-    from dotenv import load_dotenv
-    from pathlib import Path
+    
     
     # Load environment variables from .env file
     load_dotenv()

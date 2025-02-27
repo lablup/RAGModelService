@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 load_dotenv()
 
 # Constants
-DOCS_PATH = Path("/Users/lablup/Documents/GitHub/RAGModelService/TensorRT-LLM/docs/source")
+DOCS_PATH = Path("/models/RAGModelService/TensorRT-LLM/docs/source")
 
 
 class OpenAIConfig(BaseModel):

@@ -1,12 +1,12 @@
 models:
-  - name: "Backend.AI-Assistant"
+  - name: "TensorRT-LLM RAG Assistant PoC"
     model_path: "/models"
     service:
       pre_start_actions:
         - action: run_command
           args:
-            command: ["/bin/bash", "/models/setup.sh"]
+            command: ["/bin/bash", "/models/RAGModelService/setup.sh"]
       start_command:
         - python3
-        - /models/backend-ai-assistant/fastapi_server.py
+        - /models/RAGModelService/fastapi_server.py
       port: 8000

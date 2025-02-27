@@ -9,4 +9,7 @@ typer
 rich 
 pydantic 
 sse_starlette
+gradio
+fastapi
+uvicorn
 
