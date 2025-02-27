@@ -21,7 +21,7 @@ A Retrieval-Augmented Generation (RAG) service for document search and generatio
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/RAGModelService.git
+git clone https://github.com/lablup/RAGModelService.git
 cd RAGModelService
 
 # Install the package in development mode
