@@ -139,7 +139,7 @@ app.add_middleware(
 )
 
 # Initialize components
-docs_root = Path("/Users/lablup/Documents/GitHub/RAGModelService/TensorRT-LLM/docs/source")  # Directory for documentation files
+docs_root = Path("/models/RAGModelService/TensorRT-LLM/docs/source")  # Directory for documentation files
 indices_path = Path("./embedding_indices")  # Directory for vector store indices
 vector_db = None
 rag_manager = None

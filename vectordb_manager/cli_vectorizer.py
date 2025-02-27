@@ -5,7 +5,7 @@ CLI for vectorizing and searching documents
 
 Usage:
     # Process documents
-    python cli_vectorizer.py process /Users/lablup/Documents/GitHub/RAGModelService/TensorRT-LLM/docs/source
+    python cli_vectorizer.py process /home/work/RAGModelService/TensorRT-LLM/docs/source
 
     # Search in vector store
     python cli_vectorizer.py search "Login"
