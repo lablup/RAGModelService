@@ -14,3 +14,4 @@ ENV/
 .vscode/
 *.log
 .DS_Store
+.env
