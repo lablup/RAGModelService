@@ -12,4 +12,4 @@ sse_starlette
 gradio
 fastapi
 uvicorn
-
+GitPython

@@ -8,7 +8,7 @@ This script:
 3. Tests the RAG system with sample queries
 
 Usage:
-    python setup_rag.py --github-url https://github.com/owner/repo --docs-path /path/to/docs
+    python setup_rag.py --github-url https://github.com/owner/repo --output-dir ./doc
 
 Advanced Usage:
     python setup_rag.py --github-url https://github.com/owner/repo/tree/branch/path/to/docs \
@@ -31,6 +31,9 @@ Skipping Usage:
 
     # Skip testing
     python setup_rag.py --github-url https://github.com/owner/repo --skip-testing
+
+Chatting:
+    python -m app.rag_chatbot --docs-path github_docs/docs --indices-path embedding_indices
 """
 
 import argparse
