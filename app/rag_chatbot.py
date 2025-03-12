@@ -1,7 +1,11 @@
+import argparse
+import asyncio
+import os
 from pathlib import Path
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
 import structlog
+from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -11,6 +15,7 @@ from pydantic import BaseModel
 from vectordb_manager.vectordb_manager import VectorDBManager
 
 logger = structlog.get_logger()
+
 
 class ChatResponse(BaseModel):
     """Model for chat response"""
@@ -60,12 +65,12 @@ class RAGManager:
         self.memory_k = config.memory_k
 
         system_prompt = """
-        You are a helpful AI Assistant with knowledge about TensorRT-LLM ecosystem. Answer questions based on the provided context.
+        You are a helpful AI Assistant with document search and retrieval capabilities. Answer questions based on the provided context.
         Provide the detailed explanation.
-        The provided context is a list of documents from a knowledge base.
-        The similiarity score for each document is also provided as Euclidean distance where the lower the number the more similar.
+        The provided context is a list of documents from a vector store knowledge base.
+        The similarity score for each document is also provided as Euclidean distance where the lower the number the more similar.
         If the context doesn't contain relevant information, use your general knowledge but mention this fact. Keep answers focused and relevant to the query.
-        
+        If there is no context provided and you don't know, then answer "I don't know".
         """
         self.system_prompt = SystemMessage(content=system_prompt)
 
@@ -96,7 +101,6 @@ class RAGManager:
             results = await self.vector_store.search_documents(
                 query=query, k=self.config.max_results
             )
-
 
             filtered_results = results
 
@@ -146,7 +150,7 @@ class RAGManager:
 
             # Get chat history
             history = self.get_chat_history()
-
+            
             async for chunk in self.chain.astream(
                 {
                     "input": user_input,
@@ -205,50 +209,8 @@ class RAGManager:
         return self.messages
 
 
-async def main():
-    """Test the RAG chatbot functionality"""
-    import os
-    import asyncio
-    from dotenv import load_dotenv
-    from pathlib import Path
-
-    # Load environment variables from .env file
-    load_dotenv()
-
-    # Check for required environment variable
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
-        print("Error: OPENAI_API_KEY environment variable is not set.")
-        print("Please set it in a .env file or in your environment.")
-        return
-
-    # Set up paths
-    base_dir = Path(__file__).parent.parent
-    docs_root = base_dir / "docs"  # Adjust this to your documentation directory
-    indices_path = base_dir / "embedding_indices"
-
-    print(f"Initializing with docs path: {docs_root}")
-    print(f"Vector indices path: {indices_path}")
-
-    # Initialize VectorDBManager
-    vector_manager = VectorDBManager(docs_root, indices_path)
-    
-    # Load the vector index
-    print("Loading vector index...")
-    await vector_manager.load_index()
-    
-    # Set up LLM config
-    llm_config = LLMConfig(
-        openai_api_key=openai_api_key,
-        model_name=os.getenv("OPENAI_MODEL", "gpt-4o"),
-        temperature=float(os.getenv("TEMPERATURE", "0.2")),
-        max_results=int(os.getenv("MAX_RESULTS", "15")),
-        streaming=True
-    )
-    
-    # Initialize RAG manager
-    rag_manager = RAGManager(llm_config, vector_manager)
-    
+async def interactive_mode(rag_manager: RAGManager, verbose: bool = False) -> None:
+    """Run the interactive chatbot interface."""
     print("\n----- RAG Chatbot Test Interface -----")
     print("Type 'exit' or 'quit' to end the session.")
     
@@ -276,10 +238,190 @@ async def main():
                 print(chunk, end="", flush=True)
                 response_text += chunk
             print()  # Add a newline at the end
+            
+            if verbose:
+                print("\n--- Debug Info ---")
+                print(f"Model: {rag_manager.config.model_name}")
+                print(f"Temperature: {rag_manager.config.temperature}")
+                print(f"Max Results: {rag_manager.config.max_results}")
+                print(f"Messages in History: {len(rag_manager.messages)}")
+                print("------------------")
         except Exception as e:
             print(f"\nError: {str(e)}")
 
 
+async def process_single_query(rag_manager: RAGManager, query: str, show_context: bool = False) -> None:
+    """Process a single query and exit."""
+    print(f"Query: {query}")
+    
+    if show_context:
+        context, _ = await rag_manager._get_relevant_context(query)
+        print("\n----- Retrieved Context -----")
+        print(context)
+        print("----------------------------\n")
+    
+    print("\nResponse:")
+    
+    # Collect response chunks
+    response_text = ""
+    try:
+        async for chunk in rag_manager.generate_response(query):
+            # Print chunk without newline to simulate streaming
+            print(chunk, end="", flush=True)
+            response_text += chunk
+        print()  # Add a newline at the end
+    except Exception as e:
+        print(f"\nError: {str(e)}")
+
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="RAG Chatbot - Query documents using a RAG-enhanced LLM."
+    )
+    
+    # Path arguments
+    parser.add_argument(
+        "--docs-path", 
+        type=str,
+        help="Path to documentation directory"
+    )
+    parser.add_argument(
+        "--indices-path", 
+        type=str,
+        help="Path to vector indices"
+    )
+    
+    # Mode arguments
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--query", 
+        type=str,
+        metavar="QUERY",
+        help="Single query mode: Process one query and exit"
+    )
+    mode_group.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Start in interactive chat mode (default if no mode is specified)"
+    )
+    
+    # LLM configuration
+    parser.add_argument(
+        "--model", 
+        type=str,
+        default="gpt-4o",
+        help="LLM model to use (default: gpt-4o)"
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.2,
+        help="Temperature for the LLM (default: 0.2)"
+    )
+    parser.add_argument(
+        "--max-results",
+        type=int,
+        default=5,
+        help="Maximum number of results to retrieve (default: 5)"
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=2048,
+        help="Maximum tokens for the LLM response (default: 2048)"
+    )
+    
+    # Additional options
+    parser.add_argument(
+        "--show-context",
+        action="store_true",
+        help="Show retrieved context before response (only in query mode)"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show verbose output"
+    )
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default="",
+        help="Base URL for custom model endpoints"
+    )
+    
+    return parser.parse_args()
+
+
+async def main() -> int:
+    """Main function to run the RAG chatbot."""
+    # Load environment variables from .env file
+    load_dotenv()
+
+    # Check for required environment variable
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        print("Error: OPENAI_API_KEY environment variable is not set.")
+        print("Please set it in a .env file or in your environment.")
+        return 1
+    
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Set up paths
+    base_dir = Path(__file__).parent.parent
+    docs_root = Path(args.docs_path) if args.docs_path else base_dir / "docs"
+    indices_path = Path(args.indices_path) if args.indices_path else base_dir / "embedding_indices"
+
+    if args.verbose:
+        print(f"Initializing with docs path: {docs_root}")
+        print(f"Vector indices path: {indices_path}")
+
+    # Initialize VectorDBManager
+    vector_manager = VectorDBManager(docs_root, indices_path)
+    
+    # Load the vector index
+    if args.verbose:
+        print("Loading vector index...")
+    
+    try:
+        await vector_manager.load_index()
+        if not vector_manager.index:
+            print("Error: Failed to load index. Please check that the index exists.")
+            return 1
+    except Exception as e:
+        print(f"Error loading index: {e}")
+        return 1
+    
+    # Set up LLM config from arguments and environment variables
+    llm_config = LLMConfig(
+        openai_api_key=openai_api_key,
+        model_name=args.model,
+        temperature=args.temperature,
+        max_tokens=args.max_tokens,
+        max_results=args.max_results,
+        streaming=True,
+        base_url=args.base_url
+    )
+    
+    # Initialize RAG manager
+    rag_manager = RAGManager(llm_config, vector_manager)
+    
+    # Execute the requested mode
+    try:
+        if args.query:
+            await process_single_query(rag_manager, args.query, args.show_context)
+        else:
+            # Default to interactive mode
+            await interactive_mode(rag_manager, args.verbose)
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return 1
+    
+    return 0
+
+
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())
+    exit_code = asyncio.run(main())
+    exit(exit_code)

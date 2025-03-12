@@ -1,4 +1,5 @@
 import asyncio
+import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -136,7 +137,7 @@ class VectorDBManager:
             self.logger.error("Search failed", error=str(e))
             raise
 
-    async def test_search(self, query, k=5):
+    async def test_search(self, query: str, k: int = 5) -> List[Document]:
         """Return documents for a given search query."""
         if self.index is None:
             await self.load_index()
@@ -146,34 +147,8 @@ class VectorDBManager:
         return self.index.similarity_search(query, k=k)
 
 
-async def main():
-    """Test the VectorDBManager functionality."""
-    
-    
-    # Load environment variables from .env file
-    load_dotenv()
-    
-    # Check for required environment variable
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
-        print("Error: OPENAI_API_KEY environment variable is not set.")
-        print("Please set it in a .env file or in your environment.")
-        return
-    
-    # Set environment variable for OpenAI API key
-    os.environ["OPENAI_API_KEY"] = openai_api_key
-    
-    # Set up paths
-    base_dir = Path(__file__).parent.parent
-    docs_root = base_dir / "TensorRT-LLM" / "docs" / "source"  # Default to the provided docs path
-    indices_path = base_dir / "embedding_indices"
-    
-    print(f"Initializing with docs path: {docs_root}")
-    print(f"Vector indices path: {indices_path}")
-    
-    # Initialize VectorDBManager
-    vector_manager = VectorDBManager(docs_root, indices_path)
-    
+async def interactive_mode(vector_manager: VectorDBManager, docs_root: Path, indices_path: Path) -> None:
+    """Run the interactive CLI menu for the VectorDBManager."""
     while True:
         print("\n----- VectorDBManager Test Menu -----")
         print("1. Collect and print documents")
@@ -273,6 +248,193 @@ async def main():
             print("Invalid choice. Please enter a number between 1 and 6.")
 
 
+async def collect_and_print_documents(vector_manager: VectorDBManager, verbose: bool = False) -> None:
+    """Collect and print document information."""
+    try:
+        print("\nCollecting documents...")
+        documents = await vector_manager.collect_documents()
+        print(f"Collected {len(documents)} documents.")
+        
+        if documents and verbose:
+            print("\nSample documents:")
+            for i, doc in enumerate(documents[:5]):  # Show first 5 docs as samples
+                print(f"\nDocument {i+1}:")
+                print(f"Content (first 100 chars): {doc.page_content[:100]}...")
+                print(f"Metadata: {doc.metadata}")
+    except Exception as e:
+        print(f"Error collecting documents: {str(e)}")
+        raise
+
+
+async def create_index(vector_manager: VectorDBManager) -> None:
+    """Create vector index from documents."""
+    try:
+        print("\nCreating vector index...")
+        documents = await vector_manager.collect_documents()
+        
+        if not documents:
+            print("No documents found to index.")
+            return
+        
+        print(f"Creating index from {len(documents)} documents...")
+        await vector_manager.create_indices(documents)
+        print("Vector index created successfully.")
+    except Exception as e:
+        print(f"Error creating index: {str(e)}")
+        raise
+
+
+async def load_index(vector_manager: VectorDBManager) -> None:
+    """Load existing vector index."""
+    try:
+        print("\nLoading vector index...")
+        await vector_manager.load_index()
+        if vector_manager.index:
+            print("Vector index loaded successfully.")
+        else:
+            print("No vector index found to load.")
+            raise ValueError("No vector index found to load.")
+    except Exception as e:
+        print(f"Error loading index: {str(e)}")
+        raise
+
+
+async def search_documents(vector_manager: VectorDBManager, query: str, k: int = 5) -> None:
+    """Search documents in the index."""
+    try:
+        if not vector_manager.index:
+            await load_index(vector_manager)
+        
+        print(f"\nSearching for: '{query}'")
+        results = await vector_manager.test_search(query, k=k)
+        
+        print(f"\nFound {len(results)} results.")
+        for i, doc in enumerate(results):
+            print(f"\nResult {i+1}:")
+            print(f"Content (first 100 chars): {doc.page_content[:100]}...")
+            print(f"Metadata: {doc.metadata}")
+            if hasattr(doc, 'distance') and doc.distance is not None:
+                print(f"Relevance score: {1 - doc.distance:.4f}")
+    except Exception as e:
+        print(f"Error during search: {str(e)}")
+        raise
+
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="VectorDBManager - Create and search vector indices from documentation."
+    )
+    
+    # Path arguments
+    parser.add_argument(
+        "--docs-path", 
+        type=str, 
+        help="Path to documentation directory"
+    )
+    parser.add_argument(
+        "--indices-path", 
+        type=str, 
+        help="Path to store vector indices"
+    )
+    
+    # Action arguments
+    action_group = parser.add_mutually_exclusive_group()
+    action_group.add_argument(
+        "--collect", 
+        action="store_true", 
+        help="Collect and print documents"
+    )
+    action_group.add_argument(
+        "--create-index", 
+        action="store_true", 
+        help="Create vector index from documents"
+    )
+    action_group.add_argument(
+        "--load-index", 
+        action="store_true", 
+        help="Load existing vector index"
+    )
+    action_group.add_argument(
+        "--search", 
+        type=str, 
+        metavar="QUERY", 
+        help="Search documents with the provided query"
+    )
+    action_group.add_argument(
+        "--interactive", 
+        action="store_true", 
+        help="Start in interactive mode"
+    )
+    
+    # Additional options
+    parser.add_argument(
+        "-k", 
+        "--top-k", 
+        type=int, 
+        default=5, 
+        help="Number of results to return for search (default: 5)"
+    )
+    parser.add_argument(
+        "-v", 
+        "--verbose", 
+        action="store_true", 
+        help="Show more detailed output"
+    )
+    
+    return parser.parse_args()
+
+
+async def main() -> None:
+    """Main function to run the VectorDBManager CLI."""
+    # Load environment variables from .env file
+    load_dotenv()
+    
+    # Check for required environment variable
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        print("Error: OPENAI_API_KEY environment variable is not set.")
+        print("Please set it in a .env file or in your environment.")
+        return
+    
+    # Set environment variable for OpenAI API key
+    os.environ["OPENAI_API_KEY"] = openai_api_key
+    
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Set up paths
+    base_dir = Path(__file__).parent.parent
+    docs_root = Path(args.docs_path) if args.docs_path else base_dir / "docs"
+    indices_path = Path(args.indices_path) if args.indices_path else base_dir / "embedding_indices"
+    
+    print(f"Initializing with docs path: {docs_root}")
+    print(f"Vector indices path: {indices_path}")
+    
+    # Initialize VectorDBManager
+    vector_manager = VectorDBManager(docs_root, indices_path)
+    
+    # Execute the requested action
+    try:
+        if args.collect:
+            await collect_and_print_documents(vector_manager, args.verbose)
+        elif args.create_index:
+            await create_index(vector_manager)
+        elif args.load_index:
+            await load_index(vector_manager)
+        elif args.search:
+            await search_documents(vector_manager, args.search, args.top_k)
+        else:
+            # Default to interactive mode if no specific action is requested
+            await interactive_mode(vector_manager, docs_root, indices_path)
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return 1
+    
+    return 0
+
+
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())
+    exit_code = asyncio.run(main())
+    exit(exit_code)
