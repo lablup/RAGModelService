@@ -12,7 +12,7 @@ A Retrieval-Augmented Generation (RAG) service for document search and generatio
 
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - OpenAI API key
 
 ## Installation
@@ -55,10 +55,10 @@ Index your documents to create a vector store:
 
 ```bash
 # Using the CLI tool with the installed package
-rag-vectorize create --docs-path /path/to/your/documents
+python vectordb_manager/vectordb_manager.py --docs-path ./TensorRT-LLM --indices-path ./embedding_indices --create-index
 
-# Or run the module directly
-python -m vectordb_manager.cli_vectorizer create --docs-path /path/to/your/documents
+# to Test the search
+python vectordb_manager/vectordb_manager.py --search "What is AWQ?" --top-k 5
 ```
 
 ### 2. Terminal Chat Interface
@@ -66,10 +66,7 @@ python -m vectordb_manager.cli_vectorizer create --docs-path /path/to/your/docum
 Test the RAG system with a simple command-line interface:
 
 ```bash
-# Using the installed CLI tool
-rag-chat
-
-# Or run the module directly
+# run the module directly
 python -m app.rag_chatbot
 ```
 
@@ -78,21 +75,14 @@ python -m app.rag_chatbot
 Launch the Gradio web interface:
 
 ```bash
-# Using the installed CLI tool
-rag-web
-
-# Or run the module directly
-python -m app.gradio_app
+# run the module directly
+python app/gradio_app.py
 ```
 
 ### 4. Vector DB Testing
 
 Test the vector database functionality:
 
-```bash
-# Run the VectorDBManager test interface
-python -m vectordb_manager.vectordb_manager
-```
 
 ## Components
 

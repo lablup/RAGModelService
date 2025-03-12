@@ -27,6 +27,7 @@ console = Console()
 # Load configuration
 config = load_config()
 
+DOC_NAME = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 class ChatMessage(BaseModel):
     """Single chat message model"""
@@ -248,7 +249,7 @@ def create_gradio_interface(
 
     # Create Gradio interface
     with gr.Blocks(
-        title="TensorRT-LLM Documentation Assistant for PoC",
+        title=f"{DOC_NAME} Documentation Assistant",
         theme=gr.themes.Base(),
         css="""
 
@@ -258,7 +259,7 @@ def create_gradio_interface(
         initial_state = ChatState()
         state = gr.State(initial_state)
 
-        gr.Markdown("# TensorRT-LLM Documentation Assistant")
+        gr.Markdown(f"# {DOC_NAME} Documentation Assistant")
         gr.Markdown(
             "Documentation search with vector database"
         )
