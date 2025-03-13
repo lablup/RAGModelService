@@ -83,22 +83,38 @@ async def read_markdown_file(file_path: str | Path) -> str:
                     if not img_path.startswith(("http://", "https://", "data:")):
                         # Convert the path to be relative to assets/images
                         rel_path = Path(img_path).name
-                        doc_rel_path = file_path.relative_to(project_root / "docs_md")
-                        img_file = (
-                            project_root
-                            / "assets"
-                            / "images"
-                            / doc_rel_path.parent
-                            / rel_path
-                        )
-                        if img_file.exists():
-                            mime_type = mimetypes.guess_type(img_file)[0]
-                            with open(img_file, "rb") as f:
-                                img_data = base64.b64encode(f.read()).decode()
-                            return img_tag.replace(
-                                f'src="{img_path}"',
-                                f'src="data:{mime_type};base64,{img_data}"',
+                        # Use the docs_root from config instead of hardcoded path
+                        try:
+                            doc_rel_path = file_path.relative_to(config.paths.docs_root)
+                            img_file = (
+                                project_root
+                                / "rag_service"
+                                / "docs"
+                                / "assets"
+                                / "images"
+                                / doc_rel_path.parent
+                                / rel_path
                             )
+                            if img_file.exists():
+                                mime_type = mimetypes.guess_type(img_file)[0]
+                                with open(img_file, "rb") as f:
+                                    img_data = base64.b64encode(f.read()).decode()
+                                return img_tag.replace(
+                                    f'src="{img_path}"',
+                                    f'src="data:{mime_type};base64,{img_data}"',
+                                )
+                        except ValueError:
+                            # If the file is not in the docs_root, try a direct approach
+                            logger.warning(f"File {file_path} is not in the docs_root, trying direct path")
+                            img_file = file_path.parent / img_path
+                            if img_file.exists():
+                                mime_type = mimetypes.guess_type(img_file)[0]
+                                with open(img_file, "rb") as f:
+                                    img_data = base64.b64encode(f.read()).decode()
+                                return img_tag.replace(
+                                    f'src="{img_path}"',
+                                    f'src="data:{mime_type};base64,{img_data}"',
+                                )
             elif "![" in img_tag:
                 # Handle Markdown image syntax
                 md_pattern = r"!\[([^\]]*)\]\(([^)]+)\)"
@@ -109,19 +125,31 @@ async def read_markdown_file(file_path: str | Path) -> str:
                     if not img_path.startswith(("http://", "https://", "data:")):
                         # Convert the path to be relative to assets/images
                         rel_path = Path(img_path).name
-                        doc_rel_path = file_path.relative_to(project_root / "docs_md")
-                        img_file = (
-                            project_root
-                            / "assets"
-                            / "images"
-                            / doc_rel_path.parent
-                            / rel_path
-                        )
-                        if img_file.exists():
-                            mime_type = mimetypes.guess_type(img_file)[0]
-                            with open(img_file, "rb") as f:
-                                img_data = base64.b64encode(f.read()).decode()
-                            return f"![{alt_text}](data:{mime_type};base64,{img_data})"
+                        try:
+                            doc_rel_path = file_path.relative_to(config.paths.docs_root)
+                            img_file = (
+                                project_root
+                                / "rag_service"
+                                / "docs"
+                                / "assets"
+                                / "images"
+                                / doc_rel_path.parent
+                                / rel_path
+                            )
+                            if img_file.exists():
+                                mime_type = mimetypes.guess_type(img_file)[0]
+                                with open(img_file, "rb") as f:
+                                    img_data = base64.b64encode(f.read()).decode()
+                                return f"![{alt_text}](data:{mime_type};base64,{img_data})"
+                        except ValueError:
+                            # If the file is not in the docs_root, try a direct approach
+                            logger.warning(f"File {file_path} is not in the docs_root, trying direct path")
+                            img_file = file_path.parent / img_path
+                            if img_file.exists():
+                                mime_type = mimetypes.guess_type(img_file)[0]
+                                with open(img_file, "rb") as f:
+                                    img_data = base64.b64encode(f.read()).decode()
+                                return f"![{alt_text}](data:{mime_type};base64,{img_data})"
             return img_tag
 
         # Match both HTML img tags and Markdown image syntax
