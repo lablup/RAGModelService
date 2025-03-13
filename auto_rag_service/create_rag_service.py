@@ -53,6 +53,14 @@ def parse_args():
         required=True,
     )
     
+    # Docs path (optional, to use existing documentation)
+    parser.add_argument(
+        "--docs-path",
+        type=str,
+        help="Path to existing documentation directory (skips cloning if provided)",
+        default=None,
+    )
+    
     # Paths
     parser.add_argument(
         "--output-dir",
@@ -205,27 +213,38 @@ def generate_service_config(args) -> Dict:
     Returns:
         Configuration dictionary
     """
-    # Parse GitHub URL to extract repository information
+    # Load environment variables
+    load_dotenv()
+    
+    # Extract GitHub information
     owner, repo, branch, path = parse_github_url(args.github_url)
     
-    # Generate a default title and description based on repository if not provided
-    repo_name = f"{owner}/{repo}"
-    default_title = f"{repo_name} Documentation Assistant"
-    default_description = f"Search and ask questions about {repo_name} documentation"
+    # Determine output directory
+    output_dir = Path(args.output_dir).resolve()
     
-    # Create configuration dictionary
+    # Create paths
+    docs_dir = output_dir / f"{owner}_{repo}"
+    indices_dir = output_dir / f"{owner}_{repo}_indices"
+    
+    # Get OpenAI API key
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    if not openai_api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is not set")
+    
+    # Create configuration
     config = {
         "github": {
             "url": args.github_url,
             "owner": owner,
             "repo": repo,
-            "branch": branch,
+            "branch": branch or "main",  # Default to main if branch is not specified
             "path": path,
         },
         "paths": {
-            "output_dir": Path(args.output_dir),
-            "docs_dir": Path(args.output_dir) / "docs",
-            "indices_dir": Path(args.output_dir) / "indices",
+            "output_dir": output_dir,
+            "docs_dir": docs_dir,
+            "indices_dir": indices_dir,
+            "existing_docs_path": args.docs_path,  # Add the existing docs path
         },
         "server": {
             "host": args.host,
@@ -238,20 +257,24 @@ def generate_service_config(args) -> Dict:
             "temperature": args.temperature,
             "max_results": args.max_results,
             "streaming": True,
-            "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
+            "openai_api_key": openai_api_key,
         },
         "ui": {
-            "title": args.title or default_title,
-            "description": args.description or default_description,
-            "suggested_questions": args.suggested_questions or [
-                f"What is {repo}?",
-                f"How do I install {repo}?",
-                f"What are the main features of {repo}?",
-                f"How do I contribute to {repo}?",
-                f"What license is {repo} under?",
-            ],
+            "title": args.title,
+            "description": args.description,
+            "suggested_questions": args.suggested_questions,
         },
     }
+    
+    # Generate a default title and description based on repository if not provided
+    repo_name = f"{owner}/{repo}"
+    default_title = f"{repo_name} Documentation Assistant"
+    default_description = f"Search and ask questions about {repo_name} documentation"
+    
+    if not config["ui"]["title"]:
+        config["ui"]["title"] = default_title
+    if not config["ui"]["description"]:
+        config["ui"]["description"] = default_description
     
     return config
 
@@ -405,7 +428,12 @@ async def main() -> int:
         config = generate_service_config(args)
         
         # Create RAG service
-        docs_path, indices_path = await create_rag_service(config)
+        if args.docs_path:
+            docs_path = Path(args.docs_path)
+            indices_path = config["paths"]["indices_dir"]
+            print(f"Using existing documentation directory: {docs_path}")
+        else:
+            docs_path, indices_path = await create_rag_service(config)
         
         # Launch service unless skip-launch is specified
         if not args.skip_launch:

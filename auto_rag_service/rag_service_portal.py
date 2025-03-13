@@ -6,6 +6,7 @@ A Gradio interface that allows users to:
 1. Enter a GitHub URL with documentation
 2. Process it in the background to create a RAG service
 3. Provide a link to the resulting RAG Gradio service
+4. Generate a model definition YAML file for Backend.AI model service creation
 
 Usage:
     python rag_service_portal.py
@@ -101,6 +102,69 @@ def create_service_directory(service_id: str) -> Path:
     return service_dir
 
 
+def generate_model_definition(github_url: str, service_dir: Path) -> Optional[str]:
+    """
+    Generate a model definition YAML file for the RAG service.
+    
+    Args:
+        github_url: GitHub URL for documentation
+        service_dir: Path to the service directory
+        
+    Returns:
+        Path to the generated model definition file, or None if generation failed
+    """
+    try:
+        # Run generate_model_definition.py to create the model definition YAML
+        cmd = [
+            sys.executable,
+            "auto_rag_service/generate_model_definition.py",
+            "--github-url", github_url,
+            "--output-dir", str(service_dir),
+            "--service-type", "gradio"
+        ]
+        
+        # Run the command and capture output
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        
+        # Extract the path from the output
+        output_lines = result.stdout.strip().split('\n')
+        for line in output_lines:
+            if line.startswith("Model definition written to "):
+                model_def_path = line.replace("Model definition written to ", "").strip()
+                return model_def_path
+        
+        # If we couldn't find the path in the output, try to guess it
+        # Parse GitHub URL to extract components for the filename
+        pattern = r"https?://github\.com/([^/]+)/([^/]+)(?:/tree/([^/]+)(?:/(.+))?)?"
+        match = re.match(pattern, github_url)
+        if match:
+            owner, repo = match.group(1), match.group(2)
+            path = match.group(4)  # This will be None if path is not specified
+            
+            # Generate docs name for the filename
+            base_name = f"{owner}-{repo}".lower()
+            if path:
+                # Replace slashes with hyphens and remove any special characters
+                path_part = re.sub(r'[^a-zA-Z0-9-]', '', path.replace('/', '-'))
+                docs_name = f"{base_name}-{path_part}"
+            else:
+                docs_name = base_name
+                
+            return str(service_dir / f"model-definition-{docs_name}.yaml")
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error generating model definition: {e}")
+        return None
+
+
 def process_github_url(github_url: str, progress_callback: Optional[callable] = None) -> Dict:
     """
     Process a GitHub URL to create a RAG service.
@@ -169,6 +233,15 @@ def process_github_url(github_url: str, progress_callback: Optional[callable] = 
             progress_callback(0.6, "Creating vector embeddings...")
         
         service_info["message"] = "Vector embeddings created successfully."
+        
+        # Generate model definition YAML
+        if progress_callback:
+            progress_callback(0.8, "Generating model definition...")
+        
+        model_def_path = generate_model_definition(github_url, service_dir)
+        if model_def_path:
+            service_info["model_definition_path"] = model_def_path
+            service_info["message"] = "Model definition generated successfully."
         
         # Update status
         service_info["status"] = ServiceStatus.READY
@@ -262,7 +335,7 @@ def start_service(service_id: str) -> None:
         service["message"] = f"Error starting service: {str(e)}"
 
 
-def create_rag_service(github_url: str, progress=gr.Progress()) -> Tuple[str, str, str]:
+def create_rag_service(github_url: str, progress=gr.Progress()) -> Tuple[str, str, str, str]:
     """
     Create a RAG service from a GitHub URL (Gradio interface function).
     
@@ -271,13 +344,14 @@ def create_rag_service(github_url: str, progress=gr.Progress()) -> Tuple[str, st
         progress: Gradio progress tracker
         
     Returns:
-        Tuple of (status, message, url) for the Gradio interface
+        Tuple of (status, message, url, model_definition_path) for the Gradio interface
     """
     # Validate GitHub URL
     if not validate_github_url(github_url):
         return (
             ServiceStatus.ERROR,
             "Invalid GitHub URL. Please enter a valid GitHub repository URL.",
+            "",
             ""
         )
     
@@ -291,7 +365,8 @@ def create_rag_service(github_url: str, progress=gr.Progress()) -> Tuple[str, st
     return (
         service_info["status"],
         service_info["message"],
-        service_info.get("url", "")
+        service_info.get("url", ""),
+        service_info.get("model_definition_path", "")
     )
 
 
@@ -326,6 +401,11 @@ def create_interface() -> gr.Blocks:
                     interactive=False,
                     info="Click this link to access your RAG service when ready"
                 )
+                model_definition_path = gr.Textbox(
+                    label="Model Definition Path",
+                    interactive=False,
+                    info="Path to the generated model definition YAML file for Backend.AI"
+                )
         
         with gr.Row():
             examples = gr.Examples(
@@ -347,6 +427,7 @@ def create_interface() -> gr.Blocks:
                 status,
                 message,
                 service_url,
+                model_definition_path,
             ],
         )
         
@@ -359,7 +440,8 @@ def create_interface() -> gr.Blocks:
                 1. Enter a GitHub repository URL containing documentation
                 2. We'll clone the repository and create vector embeddings using OpenAI's embeddings API
                 3. A Gradio interface will be launched for querying the documentation
-                4. You'll receive a link to access the service when it's ready
+                4. A model definition YAML file will be generated for Backend.AI model service creation
+                5. You'll receive a link to access the service when it's ready
                 
                 ## Tips
                 
@@ -367,6 +449,7 @@ def create_interface() -> gr.Blocks:
                 - For better results, specify a path to the documentation directory, e.g., `https://github.com/owner/repo/tree/main/docs`
                 - The service will remain active as long as this portal is running
                 - Each service runs on a different port to avoid conflicts
+                - The generated model definition can be used to create a Backend.AI model service
                 """
             )
     
@@ -388,7 +471,7 @@ def main():
     
     # Create and launch the interface
     interface = create_interface()
-    interface.launch(server_name="0.0.0.0", server_port=7860)
+    interface.launch(server_name="0.0.0.0", server_port=8000)
     
     return 0
 

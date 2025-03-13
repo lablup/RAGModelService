@@ -16,3 +16,5 @@ ENV/
 .DS_Store
 .env
 bai_manager/*
+.env
+.python-version
